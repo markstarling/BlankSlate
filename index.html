@@ -70,6 +70,7 @@
       box-shadow: 0 2px 5px rgba(0,0,0,0.1);
       overflow: auto;
       font-size: 0.9em;
+      z-index: 1;
     }
     .note-title {
       font-weight: bold;
@@ -231,6 +232,80 @@
       justify-content: center;
       box-shadow: 0 2px 10px rgba(0,0,0,0.2);
     }
+    #corkpane {
+      height: 100%;
+      overflow: auto;
+      flex: 1;
+      box-sizing: border-box;
+      border-right: 1px solid var(--border);
+      transition: flex 0.3s;
+      position: relative;
+    }
+    
+    #cork-resize {
+      position: absolute;
+      right: 10px;
+      bottom: 10px;
+      z-index: 5;
+      cursor: se-resize;
+      font-size: 16px;
+      opacity: 0.5;
+      transition: opacity 0.2s;
+    }
+    
+    #cork-resize:hover {
+      opacity: 1;
+    }
+    
+    #cork-board {
+      position: relative;
+      min-width: 100%;
+      min-height: 100%;
+      /* Default size - can be adjusted */
+      width: 2000px;
+      height: 1500px;
+    }
+    
+    #cork-controls {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      z-index: 10;
+      display: flex;
+      gap: 5px;
+      background: var(--bg);
+      padding: 5px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    
+    .cork-control-btn {
+      cursor: pointer;
+      width: 30px;
+      height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-size: 16px;
+      transition: all 0.2s;
+    }
+    
+    .cork-control-btn:hover {
+      background: #f0f0f0;
+    }
+    
+    body.dark .cork-control-btn:hover {
+      background: #222;
+    }
+    
+    /* Move quick capture button when corkboard is visible */
+    body[data-corkboard-visible="true"] #quick-capture {
+      bottom: 110px;
+    }
   </style>
 </head>
 <body>
@@ -241,7 +316,13 @@
     <div id="prepane" class="pane">
       <div id="preview"></div>
     </div>
-    <div id="corkpane" class="pane"></div>
+    <div id="corkpane" class="pane">
+      <div id="cork-board"></div>
+      <div id="cork-controls">
+        <button class="cork-control-btn" id="cork-resize-fit" title="Fit to screen">↔</button>
+        <button class="cork-control-btn" id="cork-resize" title="Resize corkboard">⤡</button>
+      </div>
+    </div>
     
     <div id="search-container">
       <input type="text" id="search-input" placeholder="Search...">
@@ -296,6 +377,9 @@
       const focusOverlay = document.getElementById('focus-overlay');
       const focusTextarea = document.getElementById('focus-textarea');
       const focusClose = document.getElementById('focus-close');
+      const corkBoard = document.getElementById('cork-board');
+      const corkResize = document.getElementById('cork-resize');
+      const corkResizeFit = document.getElementById('cork-resize-fit');
       
       // Toolbar buttons
       const btnEditor = document.getElementById('btn-editor');
@@ -317,12 +401,15 @@
         corkboard: false
       };
       let searchMode = false;
+      let resizingCorkboard = false;
+      let corkboardSize = { width: 2000, height: 1500 };
 
       // Persistence
       function saveAll(){
         localStorage.setItem('editorText', editor.value);
         localStorage.setItem('notes', JSON.stringify(notes));
         localStorage.setItem('visiblePanes', JSON.stringify(visiblePanes));
+        localStorage.setItem('corkboardSize', JSON.stringify(corkboardSize));
       }
       
       function loadAll(){
@@ -336,6 +423,20 @@
         if(p) {
           visiblePanes = JSON.parse(p);
           updateLayout();
+        }
+        
+        const cb = localStorage.getItem('corkboardSize');
+        if(cb) {
+          try {
+            corkboardSize = JSON.parse(cb);
+            corkBoard.style.width = corkboardSize.width + 'px';
+            corkBoard.style.height = corkboardSize.height + 'px';
+          } catch(e) {
+            console.error("Error loading corkboard size", e);
+            initCorkboardSize();
+          }
+        } else {
+          initCorkboardSize();
         }
       }
 
@@ -546,14 +647,15 @@
           d.style.cursor = 'move';
           offsetX = e.clientX - n.x;
           offsetY = e.clientY - n.y;
+          d.style.zIndex = 10; // Bring to front while dragging
           e.preventDefault();
         });
         
-        corkPane.appendChild(d);
+        corkBoard.appendChild(d);
       }
       
       function renderAllNotes() {
-        corkPane.innerHTML = '';
+        corkBoard.innerHTML = '';
         notes.forEach(renderNote);
       }
       
@@ -563,8 +665,8 @@
           id: Date.now(),
           title: 'New Note',
           content: content || 'Click to edit content',
-          x: Math.random() * (corkPane.clientWidth - 200),
-          y: Math.random() * (corkPane.clientHeight - 100)
+          x: Math.random() * (corkBoard.clientWidth - 200),
+          y: Math.random() * (corkBoard.clientHeight - 100)
         };
         notes.push(note);
         renderNote(note);
@@ -685,18 +787,38 @@
       // Drag handling
       document.addEventListener('mousemove', (e) => {
         if (dragNote) {
-          dragNote.x = e.clientX - offsetX;
-          dragNote.y = e.clientY - offsetY;
+          // Calculate new position with boundary constraints
+          const newX = Math.max(0, Math.min(e.clientX - offsetX, corkBoard.clientWidth - 200));
+          const newY = Math.max(0, Math.min(e.clientY - offsetY, corkBoard.clientHeight - 100));
+          
+          dragNote.x = newX;
+          dragNote.y = newY;
           
           // Update the DOM element position
           const notes = document.querySelectorAll('.note');
           for (const note of notes) {
             const content = note.querySelector('.note-content');
-            if (content.textContent === dragNote.content) {
+            if (content && content.textContent === dragNote.content) {
               note.style.left = dragNote.x + 'px';
               note.style.top = dragNote.y + 'px';
             }
           }
+          
+          e.preventDefault();
+        } else if (resizingCorkboard) {
+          // Resize the corkboard
+          const newWidth = Math.max(corkPane.clientWidth, e.clientX - corkBoard.getBoundingClientRect().left + 20);
+          const newHeight = Math.max(corkPane.clientHeight, e.clientY - corkBoard.getBoundingClientRect().top + 20);
+          
+          // Limit maximum size based on screen dimensions
+          const maxWidth = Math.max(window.innerWidth * 2, corkPane.clientWidth * 2);
+          const maxHeight = Math.max(window.innerHeight * 1.5, corkPane.clientHeight * 1.5);
+          
+          corkBoard.style.width = Math.min(newWidth, maxWidth) + 'px';
+          corkBoard.style.height = Math.min(newHeight, maxHeight) + 'px';
+          
+          corkboardSize.width = Math.min(newWidth, maxWidth);
+          corkboardSize.height = Math.min(newHeight, maxHeight);
           
           e.preventDefault();
         }
@@ -706,14 +828,29 @@
         if (dragNote) {
           const notes = document.querySelectorAll('.note');
           for (const note of notes) {
-            if (note.querySelector('.note-content').textContent === dragNote.content) {
+            if (note.querySelector('.note-content') && note.querySelector('.note-content').textContent === dragNote.content) {
               note.style.cursor = 'text';
+              note.style.zIndex = 1; // Reset z-index after dragging
             }
           }
           saveAll();
           dragNote = null;
         }
+        
+        if (resizingCorkboard) {
+          resizingCorkboard = false;
+          saveAll();
+        }
       });
+      
+      // Corkboard resizing
+      corkResize.addEventListener('mousedown', (e) => {
+        resizingCorkboard = true;
+        e.preventDefault();
+      });
+      
+      // Fit corkboard to content
+      corkResizeFit.addEventListener('click', fitCorkboardToScreen);
       
       // Pane visibility and layout
       function updateLayout() {
@@ -721,6 +858,9 @@
         btnEditor.classList.toggle('active', visiblePanes.editor);
         btnPreview.classList.toggle('active', visiblePanes.preview);
         btnCorkboard.classList.toggle('active', visiblePanes.corkboard);
+        
+        // Set attribute for corkboard visibility (for CSS targeting)
+        document.body.setAttribute('data-corkboard-visible', visiblePanes.corkboard);
         
         // Show/hide panes
         edPane.style.display = visiblePanes.editor ? 'block' : 'none';
@@ -878,6 +1018,109 @@
         
         // Initial layout
         updateLayout();
+        
+        // Ensure corkboard size is initialized
+        if (!corkBoard.style.width) {
+          initCorkboardSize();
+        }
+      }
+      
+      // Initialize corkboard size
+      function initCorkboardSize() {
+        // Set a reasonable default based on viewport size
+        // Use viewport dimensions to set initial size
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        
+        // Cap initial size to something reasonable relative to the viewport
+        const defaultWidth = Math.min(viewportWidth * 2, 2000);
+        const defaultHeight = Math.min(viewportHeight * 1.5, 1500);
+        
+        corkboardSize = { 
+          width: defaultWidth, 
+          height: defaultHeight 
+        };
+        
+        // Update the cork board element
+        corkBoard.style.width = corkboardSize.width + 'px';
+        corkBoard.style.height = corkboardSize.height + 'px';
+        
+        // Keep the board centered initially
+        corkPane.scrollLeft = (corkboardSize.width - corkPane.clientWidth) / 2;
+        corkPane.scrollTop = Math.min(
+          (corkboardSize.height - corkPane.clientHeight) / 2,
+          200 // Limit initial vertical scroll to keep top portion visible
+        );
+      }
+      
+      // Fit corkboard to viewport
+      function fitCorkboardToScreen() {
+        // Find all notes
+        const allNotes = document.querySelectorAll('.note');
+        
+        if (allNotes.length === 0) {
+          // If no notes, just reset to default size
+          initCorkboardSize();
+          return;
+        }
+        
+        // Find boundaries of all notes
+        let minX = Infinity, minY = Infinity;
+        let maxX = 0, maxY = 0;
+        
+        allNotes.forEach(note => {
+          const x = parseInt(note.style.left);
+          const y = parseInt(note.style.top);
+          const width = note.offsetWidth;
+          const height = note.offsetHeight;
+          
+          minX = Math.min(minX, x);
+          minY = Math.min(minY, y);
+          maxX = Math.max(maxX, x + width);
+          maxY = Math.max(maxY, y + height);
+        });
+        
+        // Add padding
+        minX = Math.max(0, minX - 50);
+        minY = Math.max(0, minY - 50);
+        maxX += 100;
+        maxY += 100;
+        
+        // Ensure minimum size
+        maxX = Math.max(maxX, corkPane.clientWidth);
+        maxY = Math.max(maxY, corkPane.clientHeight);
+        
+        // Reposition all notes to account for new origin
+        if (minX > 0 || minY > 0) {
+          allNotes.forEach(note => {
+            const x = parseInt(note.style.left);
+            const y = parseInt(note.style.top);
+            
+            note.style.left = (x - minX) + 'px';
+            note.style.top = (y - minY) + 'px';
+            
+            // Update note data
+            const content = note.querySelector('.note-content');
+            if (content) {
+              const noteData = notes.find(n => n.content === content.textContent);
+              if (noteData) {
+                noteData.x = x - minX;
+                noteData.y = y - minY;
+              }
+            }
+          });
+        }
+        
+        // Update corkboard size
+        const newWidth = maxX - minX;
+        const newHeight = maxY - minY;
+        
+        corkBoard.style.width = newWidth + 'px';
+        corkBoard.style.height = newHeight + 'px';
+        corkboardSize.width = newWidth;
+        corkboardSize.height = newHeight;
+        
+        saveAll();
       }
       
       init();
