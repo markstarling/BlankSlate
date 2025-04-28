@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Distraction-Free Markdown Editor with Corkboard</title>
+  <style>
+    :root {
+      --bg: #fafafa;
+      --fg: #333;
+      --maxw: 650px;
+      --border: #ddd;
+      --accent: #4b8bf4;
+      --note-yellow: #fff8dc;
+    }
+    body {
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      transition: background 0.3s, color 0.3s;
+    }
+    #container {
+      flex: 1;
+      display: flex;
+      position: relative;
+    }
+    .pane {
+      height: 100%;
+      overflow: auto;
+      flex: 1;
+      box-sizing: border-box;
+      border-right: 1px solid var(--border);
+      transition: flex 0.3s;
+    }
+    #edpane textarea {
+      width: 100%;
+      height: 100%;
+      border: none;
+      outline: none;
+      resize: none;
+      max-width: var(--maxw);
+      margin: auto;
+      padding: 1em;
+      line-height: 1.6;
+      font-size: 1em;
+      background: none;
+      color: inherit;
+      font-family: inherit;
+      box-sizing: border-box;
+      transition: opacity 0.3s;
+    }
+    #prepane {
+      padding: 1em;
+    }
+    #preview {
+      max-width: var(--maxw);
+      margin: auto;
+      line-height: 1.6;
+    }
+    .note {
+      position: absolute;
+      width: 200px;
+      background: var(--note-yellow);
+      border: 1px solid #ccc;
+      padding: 0.5em;
+      cursor: move;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      overflow: auto;
+      font-size: 0.9em;
+    }
+    .note-title {
+      font-weight: bold;
+      border-bottom: 1px solid #ddd;
+      padding-bottom: 4px;
+      margin-bottom: 4px;
+    }
+    .note-buttons {
+      position: absolute;
+      top: 2px;
+      right: 2px;
+      display: flex;
+      gap: 2px;
+    }
+    .note-btn {
+      cursor: pointer;
+      background: none;
+      border: none;
+      font-size: 12px;
+      opacity: 0.5;
+      padding: 2px;
+    }
+    .note-btn:hover {
+      opacity: 1;
+    }
+    #toolbar {
+      background: var(--bg);
+      padding: 10px;
+      display: flex;
+      gap: 10px;
+      border-top: 1px solid var(--border);
+      justify-content: space-between;
+    }
+    .toolbar-section {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    button {
+      padding: 5px 10px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--fg);
+      cursor: pointer;
+      border-radius: 4px;
+      transition: all 0.2s;
+    }
+    button:hover {
+      background: #f0f0f0;
+    }
+    button.active {
+      background: var(--accent);
+      color: white;
+      border-color: var(--accent);
+    }
+    .stats {
+      font-size: 0.8em;
+      color: #888;
+    }
+    #quick-format {
+      display: flex;
+      gap: 5px;
+    }
+    .format-btn {
+      padding: 3px 8px;
+      font-size: 0.9em;
+    }
+    #search-container {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      z-index: 100;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 5px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      display: none;
+    }
+    #search-input {
+      border: 1px solid var(--border);
+      padding: 5px;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    #focus-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.8);
+      z-index: 1000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+    #focus-editor {
+      width: 90%;
+      max-width: 700px;
+      height: 80%;
+      background: var(--bg);
+      padding: 20px;
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+    }
+    #focus-textarea {
+      flex: 1;
+      border: none;
+      outline: none;
+      resize: none;
+      font-family: inherit;
+      font-size: 1.1em;
+      line-height: 1.6;
+      background: none;
+      color: inherit;
+    }
+    #focus-close {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: none;
+      border: none;
+      color: white;
+      font-size: 24px;
+      cursor: pointer;
+    }
+    body.dark {
+      --bg: #111;
+      --fg: #eee;
+      --border: #333;
+      --accent: #5d93f5;
+      --note-yellow: #3a3a20;
+    }
+    body.dark .note {
+      background: var(--note-yellow);
+      border-color: #444;
+      color: #eee;
+    }
+    body.dark button:hover {
+      background: #222;
+    }
+    #quick-capture {
+      position: fixed;
+      bottom: 60px;
+      right: 20px;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: white;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <div id="edpane" class="pane">
+      <textarea id="editor" placeholder="Start writing…"></textarea>
+    </div>
+    <div id="prepane" class="pane">
+      <div id="preview"></div>
+    </div>
+    <div id="corkpane" class="pane"></div>
+    
+    <div id="search-container">
+      <input type="text" id="search-input" placeholder="Search...">
+    </div>
+  </div>
+  
+  <div id="toolbar">
+    <div class="toolbar-section">
+      <button id="btn-editor" class="toggle">Editor</button>
+      <button id="btn-preview" class="toggle">Preview</button>
+      <button id="btn-corkboard" class="toggle">Corkboard</button>
+      <button id="btn-add-note">Add Note</button>
+    </div>
+    
+    <div class="toolbar-section" id="quick-format">
+      <button class="format-btn" data-format="bold">B</button>
+      <button class="format-btn" data-format="italic">I</button>
+      <button class="format-btn" data-format="heading">H</button>
+      <button class="format-btn" data-format="link">🔗</button>
+      <button class="format-btn" data-format="list">•</button>
+      <button class="format-btn" data-format="code">{ }</button>
+    </div>
+    
+    <div class="toolbar-section">
+      <span class="stats" id="word-count">0 words</span>
+      <button id="btn-focus">Focus</button>
+      <button id="btn-search">🔍</button>
+      <button id="btn-theme">Theme</button>
+    </div>
+  </div>
+  
+  <button id="quick-capture">+</button>
+  
+  <div id="focus-overlay">
+    <div id="focus-editor">
+      <textarea id="focus-textarea"></textarea>
+    </div>
+    <button id="focus-close">×</button>
+  </div>
+
+  <script>
+    (function(){
+      // Elements
+      const edPane = document.getElementById('edpane');
+      const prePane = document.getElementById('prepane');
+      const corkPane = document.getElementById('corkpane');
+      const editor = document.getElementById('editor');
+      const preview = document.getElementById('preview');
+      const wordCount = document.getElementById('word-count');
+      const searchContainer = document.getElementById('search-container');
+      const searchInput = document.getElementById('search-input');
+      const focusOverlay = document.getElementById('focus-overlay');
+      const focusTextarea = document.getElementById('focus-textarea');
+      const focusClose = document.getElementById('focus-close');
+      
+      // Toolbar buttons
+      const btnEditor = document.getElementById('btn-editor');
+      const btnPreview = document.getElementById('btn-preview');
+      const btnCorkboard = document.getElementById('btn-corkboard');
+      const btnAddNote = document.getElementById('btn-add-note');
+      const btnTheme = document.getElementById('btn-theme');
+      const btnFocus = document.getElementById('btn-focus');
+      const btnSearch = document.getElementById('btn-search');
+      const quickCapture = document.getElementById('quick-capture');
+      const formatButtons = document.querySelectorAll('.format-btn');
+
+      // State
+      let notes = [];
+      let dragNote = null, offsetX=0, offsetY=0;
+      let visiblePanes = {
+        editor: true,
+        preview: false,
+        corkboard: false
+      };
+      let searchMode = false;
+
+      // Persistence
+      function saveAll(){
+        localStorage.setItem('editorText', editor.value);
+        localStorage.setItem('notes', JSON.stringify(notes));
+        localStorage.setItem('visiblePanes', JSON.stringify(visiblePanes));
+      }
+      
+      function loadAll(){
+        const t = localStorage.getItem('editorText');
+        if(t) editor.value = t;
+        
+        const s = localStorage.getItem('notes');
+        if(s) notes = JSON.parse(s);
+        
+        const p = localStorage.getItem('visiblePanes');
+        if(p) {
+          visiblePanes = JSON.parse(p);
+          updateLayout();
+        }
+      }
+
+      // Markdown parsing (basic)
+      function escapeHtml(s){
+        return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      }
+      
+      function parseMarkdown(md){
+        let html = escapeHtml(md);
+        html = html.replace(/```([\s\S]*?)```/g,(_,c)=>'<pre><code>'+escapeHtml(c)+'</code></pre>');
+        html = html
+          .replace(/^###### (.*)$/gm,'<h6>$1</h6>')
+          .replace(/^##### (.*)$/gm,'<h5>$1</h5>')
+          .replace(/^#### (.*)$/gm,'<h4>$1</h4>')
+          .replace(/^### (.*)$/gm,'<h3>$1</h3>')
+          .replace(/^## (.*)$/gm,'<h2>$1</h2>')
+          .replace(/^# (.*)$/gm,'<h1>$1</h1>')
+          .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+          .replace(/\*(.+?)\*/g,'<em>$1</em>')
+          .replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" target="_blank">$1</a>')
+          .replace(/^\s*-\s+(.*)$/gm,'<li>$1</li>')
+          .replace(/(<li>.*<\/li>)/g,'<ul>$1</ul>')
+          .replace(/^\s*(?!<h|<ul|<pre|<li)(.+)$/gm,'<p>$1</p>');
+        return html;
+      }
+      
+      let previewTimer;
+      function updatePreview(){
+        preview.innerHTML = parseMarkdown(editor.value);
+      }
+      
+      // Word count
+      function updateWordCount() {
+        const text = editor.value.trim();
+        const count = text ? text.split(/\s+/).length : 0;
+        wordCount.textContent = count + ' words';
+      }
+
+      // Text formatting helpers
+      function formatText(type) {
+        const textarea = document.activeElement === focusTextarea ? focusTextarea : editor;
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const selection = textarea.value.substring(start, end);
+        let replacement = '';
+        let cursorOffset = 0;
+        
+        switch(type) {
+          case 'bold':
+            replacement = `**${selection || 'bold text'}**`;
+            cursorOffset = selection ? 0 : 2;
+            break;
+          case 'italic':
+            replacement = `*${selection || 'italic text'}*`;
+            cursorOffset = selection ? 0 : 1;
+            break;
+          case 'heading':
+            replacement = `## ${selection || 'Heading'}`;
+            cursorOffset = selection ? 0 : 10;
+            break;
+          case 'link':
+            replacement = `[${selection || 'link text'}](url)`;
+            cursorOffset = selection ? 3 : 12;
+            break;
+          case 'list':
+            replacement = `- ${selection || 'List item'}`;
+            cursorOffset = selection ? 0 : 11;
+            break;
+          case 'code':
+            replacement = `\`\`\`\n${selection || 'code'}\n\`\`\``;
+            cursorOffset = selection ? 0 : 4;
+            break;
+        }
+        
+        textarea.focus();
+        const newValue = textarea.value.substring(0, start) + replacement + textarea.value.substring(end);
+        textarea.value = newValue;
+        
+        // Update editor if we're in focus mode
+        if (document.activeElement === focusTextarea) {
+          editor.value = focusTextarea.value;
+        }
+        
+        // Set cursor position
+        if (!selection) {
+          textarea.selectionStart = start + replacement.length - cursorOffset;
+          textarea.selectionEnd = textarea.selectionStart;
+        } else {
+          textarea.selectionStart = start;
+          textarea.selectionEnd = start + replacement.length;
+        }
+        
+        saveAll();
+        updateWordCount();
+        updatePreview();
+      }
+
+      // Corkboard note creation + rendering
+      function renderNote(n){
+        const d = document.createElement('div');
+        d.className = 'note';
+        
+        // Create note structure
+        const titleDiv = document.createElement('div');
+        titleDiv.className = 'note-title';
+        titleDiv.textContent = n.title || 'Note';
+        titleDiv.contentEditable = 'true';
+        
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'note-content';
+        contentDiv.textContent = n.content || '';
+        contentDiv.contentEditable = 'true';
+        
+        // Create note buttons
+        const buttonsDiv = document.createElement('div');
+        buttonsDiv.className = 'note-buttons';
+        
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'note-btn';
+        copyBtn.textContent = '📋';
+        copyBtn.title = 'Copy to clipboard';
+        
+        const insertBtn = document.createElement('button');
+        insertBtn.className = 'note-btn';
+        insertBtn.textContent = '📝';
+        insertBtn.title = 'Insert into editor';
+        
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'note-btn';
+        deleteBtn.textContent = '✕';
+        deleteBtn.title = 'Delete note';
+        
+        // Add elements to note
+        buttonsDiv.appendChild(copyBtn);
+        buttonsDiv.appendChild(insertBtn);
+        buttonsDiv.appendChild(deleteBtn);
+        
+        d.appendChild(titleDiv);
+        d.appendChild(contentDiv);
+        d.appendChild(buttonsDiv);
+        
+        // Position note
+        d.style.left = n.x + 'px';
+        d.style.top = n.y + 'px';
+        
+        // Save changes when editing note
+        titleDiv.addEventListener('input', () => {
+          n.title = titleDiv.textContent;
+          saveAll();
+        });
+        
+        contentDiv.addEventListener('input', () => {
+          n.content = contentDiv.textContent;
+          saveAll();
+        });
+        
+        // Button event handlers
+        copyBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          navigator.clipboard.writeText(n.content);
+          
+          // Visual feedback
+          copyBtn.textContent = '✓';
+          setTimeout(() => { copyBtn.textContent = '📋'; }, 1000);
+        });
+        
+        insertBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const currentValue = editor.value;
+          const cursorPos = editor.selectionStart;
+          
+          // Insert at cursor position
+          editor.value = currentValue.substring(0, cursorPos) + 
+                         n.content + 
+                         currentValue.substring(cursorPos);
+          
+          // Update everything
+          editor.focus();
+          editor.selectionStart = cursorPos + n.content.length;
+          editor.selectionEnd = cursorPos + n.content.length;
+          saveAll();
+          updateWordCount();
+          updatePreview();
+          
+          // Make editor visible if it's not
+          if (!visiblePanes.editor) {
+            visiblePanes.editor = true;
+            updateLayout();
+          }
+        });
+        
+        deleteBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          notes = notes.filter(note => note !== n);
+          saveAll();
+          renderAllNotes();
+        });
+        
+        // Drag start handler
+        d.addEventListener('mousedown', (e) => {
+          // Don't initiate drag if we clicked on buttons or are editing text
+          if (e.target.closest('.note-buttons') || window.getSelection().toString() !== '') {
+            return;
+          }
+          
+          dragNote = n;
+          d.style.cursor = 'move';
+          offsetX = e.clientX - n.x;
+          offsetY = e.clientY - n.y;
+          e.preventDefault();
+        });
+        
+        corkPane.appendChild(d);
+      }
+      
+      function renderAllNotes() {
+        corkPane.innerHTML = '';
+        notes.forEach(renderNote);
+      }
+      
+      // Create a new note
+      function createNote(content = '') {
+        const note = {
+          id: Date.now(),
+          title: 'New Note',
+          content: content || 'Click to edit content',
+          x: Math.random() * (corkPane.clientWidth - 200),
+          y: Math.random() * (corkPane.clientHeight - 100)
+        };
+        notes.push(note);
+        renderNote(note);
+        saveAll();
+        
+        return note;
+      }
+      
+      // Quick capture selected text
+      function captureSelection() {
+        const selected = editor.value.substring(editor.selectionStart, editor.selectionEnd);
+        
+        if (selected) {
+          // Create a note with the selected text
+          createNote(selected);
+          
+          // Make sure corkboard is visible
+          if (!visiblePanes.corkboard) {
+            visiblePanes.corkboard = true;
+            updateLayout();
+          }
+        } else {
+          // If nothing selected, just create an empty note
+          createNote();
+        }
+      }
+      
+      // Focus mode
+      function toggleFocusMode() {
+        if (focusOverlay.style.display === 'flex') {
+          // Exit focus mode
+          focusOverlay.style.display = 'none';
+          editor.value = focusTextarea.value;
+          saveAll();
+          updateWordCount();
+          updatePreview();
+        } else {
+          // Enter focus mode
+          focusOverlay.style.display = 'flex';
+          focusTextarea.value = editor.value;
+          focusTextarea.focus();
+        }
+      }
+      
+      // Search functionality
+      function toggleSearch() {
+        searchMode = !searchMode;
+        searchContainer.style.display = searchMode ? 'block' : 'none';
+        
+        if (searchMode) {
+          searchInput.focus();
+        }
+      }
+      
+      function performSearch() {
+        const query = searchInput.value.toLowerCase();
+        
+        if (!query) return;
+        
+        // Search in editor content
+        const editorContent = editor.value.toLowerCase();
+        if (editorContent.includes(query)) {
+          // Find all occurrences
+          const matches = [];
+          let startPos = editorContent.indexOf(query);
+          
+          while (startPos !== -1) {
+            matches.push(startPos);
+            startPos = editorContent.indexOf(query, startPos + 1);
+          }
+          
+          // Highlight first match
+          if (matches.length > 0) {
+            editor.focus();
+            editor.selectionStart = matches[0];
+            editor.selectionEnd = matches[0] + query.length;
+            
+            // Make sure editor is visible
+            if (!visiblePanes.editor) {
+              visiblePanes.editor = true;
+              updateLayout();
+            }
+            return;
+          }
+        }
+        
+        // Search in notes if not found in editor
+        const noteMatch = notes.find(note => 
+          note.title.toLowerCase().includes(query) || 
+          note.content.toLowerCase().includes(query)
+        );
+        
+        if (noteMatch) {
+          // Make sure corkboard is visible
+          if (!visiblePanes.corkboard) {
+            visiblePanes.corkboard = true;
+            updateLayout();
+          }
+          
+          // Scroll to the matching note
+          const noteElements = document.querySelectorAll('.note');
+          for (const el of noteElements) {
+            if (el.querySelector('.note-content').textContent === noteMatch.content) {
+              el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              
+              // Highlight the note briefly
+              el.style.boxShadow = '0 0 0 3px var(--accent)';
+              setTimeout(() => {
+                el.style.boxShadow = '0 2px 5px rgba(0,0,0,0.1)';
+              }, 2000);
+              
+              break;
+            }
+          }
+        }
+      }
+      
+      // Drag handling
+      document.addEventListener('mousemove', (e) => {
+        if (dragNote) {
+          dragNote.x = e.clientX - offsetX;
+          dragNote.y = e.clientY - offsetY;
+          
+          // Update the DOM element position
+          const notes = document.querySelectorAll('.note');
+          for (const note of notes) {
+            const content = note.querySelector('.note-content');
+            if (content.textContent === dragNote.content) {
+              note.style.left = dragNote.x + 'px';
+              note.style.top = dragNote.y + 'px';
+            }
+          }
+          
+          e.preventDefault();
+        }
+      });
+      
+      document.addEventListener('mouseup', () => {
+        if (dragNote) {
+          const notes = document.querySelectorAll('.note');
+          for (const note of notes) {
+            if (note.querySelector('.note-content').textContent === dragNote.content) {
+              note.style.cursor = 'text';
+            }
+          }
+          saveAll();
+          dragNote = null;
+        }
+      });
+      
+      // Pane visibility and layout
+      function updateLayout() {
+        // Update button states
+        btnEditor.classList.toggle('active', visiblePanes.editor);
+        btnPreview.classList.toggle('active', visiblePanes.preview);
+        btnCorkboard.classList.toggle('active', visiblePanes.corkboard);
+        
+        // Show/hide panes
+        edPane.style.display = visiblePanes.editor ? 'block' : 'none';
+        prePane.style.display = visiblePanes.preview ? 'block' : 'none';
+        corkPane.style.display = visiblePanes.corkboard ? 'block' : 'none';
+        
+        // Update preview content if visible
+        if (visiblePanes.preview) {
+          updatePreview();
+        }
+        
+        // Count visible panes
+        const visibleCount = Object.values(visiblePanes).filter(v => v).length;
+        
+        if (visibleCount > 1) {
+          // Give each visible pane equal width
+          const width = (100 / visibleCount) + '%';
+          if (visiblePanes.editor) edPane.style.width = width;
+          if (visiblePanes.preview) prePane.style.width = width;
+          if (visiblePanes.corkboard) corkPane.style.width = width;
+        } else {
+          // Single pane takes full width
+          if (visiblePanes.editor) edPane.style.width = '100%';
+          if (visiblePanes.preview) prePane.style.width = '100%';
+          if (visiblePanes.corkboard) corkPane.style.width = '100%';
+        }
+        
+        saveAll();
+      }
+      
+      // Toggle pane visibility
+      function togglePane(pane) {
+        visiblePanes[pane] = !visiblePanes[pane];
+        
+        // Ensure at least one pane is visible
+        if (!visiblePanes.editor && !visiblePanes.preview && !visiblePanes.corkboard) {
+          visiblePanes.editor = true;
+        }
+        
+        updateLayout();
+      }
+      
+      // Button event listeners
+      btnEditor.addEventListener('click', () => togglePane('editor'));
+      btnPreview.addEventListener('click', () => togglePane('preview'));
+      btnCorkboard.addEventListener('click', () => togglePane('corkboard'));
+      btnAddNote.addEventListener('click', () => createNote());
+      btnTheme.addEventListener('click', () => {
+        document.body.classList.toggle('dark');
+        localStorage.setItem('darkMode', document.body.classList.contains('dark'));
+      });
+      btnFocus.addEventListener('click', toggleFocusMode);
+      btnSearch.addEventListener('click', toggleSearch);
+      focusClose.addEventListener('click', toggleFocusMode);
+      quickCapture.addEventListener('click', captureSelection);
+      
+      // Format buttons
+      formatButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+          formatText(btn.dataset.format);
+        });
+      });
+      
+      // Search handling
+      searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          performSearch();
+        } else if (e.key === 'Escape') {
+          toggleSearch();
+        }
+      });
+      
+      // Keyboard shortcuts
+      document.addEventListener('keydown', (e) => {
+        if (e.ctrlKey || e.metaKey) {
+          if (e.key === '1') {
+            togglePane('editor');
+            e.preventDefault();
+          } else if (e.key === '2') {
+            togglePane('preview');
+            e.preventDefault();
+          } else if (e.key === '3') {
+            togglePane('corkboard');
+            e.preventDefault();
+          } else if (e.key === 'n' || e.key === 'N') {
+            // Create new note with Ctrl/Cmd + N
+            createNote();
+            
+            // Make sure corkboard is visible
+            if (!visiblePanes.corkboard) {
+              visiblePanes.corkboard = true;
+              updateLayout();
+            }
+            
+            e.preventDefault();
+          } else if (e.key === 's' || e.key === 'S') {
+            // Manual save with Ctrl/Cmd + S
+            saveAll();
+            e.preventDefault();
+          } else if (e.key === 't' || e.key === 'T') {
+            // Toggle theme with Ctrl/Cmd + T
+            document.body.classList.toggle('dark');
+            localStorage.setItem('darkMode', document.body.classList.contains('dark'));
+            e.preventDefault();
+          } else if (e.key === 'f' || e.key === 'F') {
+            // Toggle focus mode with Ctrl/Cmd + F
+            toggleFocusMode();
+            e.preventDefault();
+          } else if (e.key === 'k' || e.key === 'K') {
+            // Search with Ctrl/Cmd + K
+            toggleSearch();
+            e.preventDefault();
+          } else if (e.key === '/' || e.key === '?') {
+            // Quick capture with Ctrl/Cmd + /
+            captureSelection();
+            e.preventDefault();
+          }
+        } else if (e.key === 'Escape') {
+          // Escape key handling
+          if (searchMode) {
+            toggleSearch();
+          } else if (focusOverlay.style.display === 'flex') {
+            toggleFocusMode();
+          }
+        }
+      });
+      
+      // Live preview and word count
+      editor.addEventListener('input', () => {
+        clearTimeout(previewTimer);
+        previewTimer = setTimeout(updatePreview, 300);
+        updateWordCount();
+        saveAll();
+      });
+      
+      // Focus mode textarea sync
+      focusTextarea.addEventListener('input', () => {
+        editor.value = focusTextarea.value;
+        clearTimeout(previewTimer);
+        previewTimer = setTimeout(updatePreview, 300);
+        updateWordCount();
+        saveAll();
+      });
+      
+      // Initialization
+      function init() {
+        loadAll();
+        renderAllNotes();
+        updateWordCount();
+        
+        // Apply saved theme
+        if (localStorage.getItem('darkMode') === 'true') {
+          document.body.classList.add('dark');
+        }
+        
+        // Initial layout
+        updateLayout();
+      }
+      
+      init();
+    })();
+  </script>
+</body>
+</html>
