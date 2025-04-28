@@ -549,11 +549,13 @@
         titleDiv.className = 'note-title';
         titleDiv.textContent = n.title || 'Note';
         titleDiv.contentEditable = 'true';
+        titleDiv.style.userSelect = 'text';
         
         const contentDiv = document.createElement('div');
         contentDiv.className = 'note-content';
-        contentDiv.textContent = n.content || '';
+        contentDiv.textContent = n.content || 'Click to edit content';
         contentDiv.contentEditable = 'true';
+        contentDiv.style.userSelect = 'text';
         
         // Create note buttons
         const buttonsDiv = document.createElement('div');
@@ -587,6 +589,19 @@
         d.style.left = n.x + 'px';
         d.style.top = n.y + 'px';
         
+        // Clear placeholder text on click
+        titleDiv.addEventListener('focus', () => {
+          if (titleDiv.textContent === 'Note') {
+            titleDiv.textContent = '';
+          }
+        });
+        
+        contentDiv.addEventListener('focus', () => {
+          if (contentDiv.textContent === 'Click to edit content') {
+            contentDiv.textContent = '';
+          }
+        });
+        
         // Save changes when editing note
         titleDiv.addEventListener('input', () => {
           n.title = titleDiv.textContent;
@@ -596,6 +611,15 @@
         contentDiv.addEventListener('input', () => {
           n.content = contentDiv.textContent;
           saveAll();
+        });
+        
+        // Ensure editing works by preventing drag when text is selected
+        titleDiv.addEventListener('mousedown', (e) => {
+          e.stopPropagation();
+        });
+        
+        contentDiv.addEventListener('mousedown', (e) => {
+          e.stopPropagation();
         });
         
         // Button event handlers
