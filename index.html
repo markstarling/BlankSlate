@@ -26,6 +26,8 @@
       flex: 1;
       display: flex;
       position: relative;
+      max-height: calc(100vh - 60px);
+      overflow: hidden;
     }
     .pane {
       height: 100%;
@@ -34,6 +36,7 @@
       box-sizing: border-box;
       border-right: 1px solid var(--border);
       transition: flex 0.3s;
+      max-height: 100%;
     }
     #edpane textarea {
       width: 100%;
@@ -240,6 +243,7 @@
       border-right: 1px solid var(--border);
       transition: flex 0.3s;
       position: relative;
+      max-height: 100vh;
     }
     
     #cork-resize {
@@ -1032,9 +1036,9 @@
         const viewportWidth = window.innerWidth;
         const viewportHeight = window.innerHeight;
         
-        // Cap initial size to something reasonable relative to the viewport
-        const defaultWidth = Math.min(viewportWidth * 2, 2000);
-        const defaultHeight = Math.min(viewportHeight * 1.5, 1500);
+        // Set initial size to fit within viewport
+        const defaultWidth = Math.min(viewportWidth, 1200);
+        const defaultHeight = Math.min(viewportHeight, 800);
         
         corkboardSize = { 
           width: defaultWidth, 
@@ -1045,12 +1049,9 @@
         corkBoard.style.width = corkboardSize.width + 'px';
         corkBoard.style.height = corkboardSize.height + 'px';
         
-        // Keep the board centered initially
-        corkPane.scrollLeft = (corkboardSize.width - corkPane.clientWidth) / 2;
-        corkPane.scrollTop = Math.min(
-          (corkboardSize.height - corkPane.clientHeight) / 2,
-          200 // Limit initial vertical scroll to keep top portion visible
-        );
+        // Start at the top-left corner to ensure visibility
+        corkPane.scrollLeft = 0;
+        corkPane.scrollTop = 0;
       }
       
       // Fit corkboard to viewport
@@ -1086,9 +1087,11 @@
         maxX += 100;
         maxY += 100;
         
-        // Ensure minimum size
-        maxX = Math.max(maxX, corkPane.clientWidth);
-        maxY = Math.max(maxY, corkPane.clientHeight);
+        // Ensure minimum size based on viewport
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        maxX = Math.max(maxX, Math.min(viewportWidth, 1200));
+        maxY = Math.max(maxY, Math.min(viewportHeight, 800));
         
         // Reposition all notes to account for new origin
         if (minX > 0 || minY > 0) {
@@ -1115,13 +1118,31 @@
         const newWidth = maxX - minX;
         const newHeight = maxY - minY;
         
-        corkBoard.style.width = newWidth + 'px';
-        corkBoard.style.height = newHeight + 'px';
-        corkboardSize.width = newWidth;
-        corkboardSize.height = newHeight;
+        // Cap size to viewport dimensions
+        corkBoard.style.width = Math.min(newWidth, viewportWidth * 1.5) + 'px';
+        corkBoard.style.height = Math.min(newHeight, viewportHeight * 1.2) + 'px';
+        corkboardSize.width = Math.min(newWidth, viewportWidth * 1.5);
+        corkboardSize.height = Math.min(newHeight, viewportHeight * 1.2);
+        
+        // Scroll to top-left to ensure visibility
+        corkPane.scrollLeft = 0;
+        corkPane.scrollTop = 0;
         
         saveAll();
       }
+      
+      // Handle window resize to adjust corkboard size if needed
+      window.addEventListener('resize', () => {
+        if (corkboardSize.width > window.innerWidth * 1.5 || corkboardSize.height > window.innerHeight * 1.2) {
+          corkboardSize.width = Math.min(corkboardSize.width, window.innerWidth * 1.5);
+          corkboardSize.height = Math.min(corkboardSize.height, window.innerHeight * 1.2);
+          
+          corkBoard.style.width = corkboardSize.width + 'px';
+          corkBoard.style.height = corkboardSize.height + 'px';
+          
+          saveAll();
+        }
+      });
       
       init();
     })();
