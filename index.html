@@ -447,13 +447,11 @@
       <span class="stats" id="word-count">0 words</span>
       <button id="search-btn">🔍</button>
       <button id="theme-btn">Theme</button>
+      <button id="reset-btn" title="Clear all data and start fresh">Reset</button>
+      <button id="capture-btn" title="Capture selection">+</button>
     </div>
   </div>
   
-  <div id="floating-buttons">
-    <button class="floating-btn" id="capture-btn" title="Capture selection">+</button>
-  </div>
-
   <script>
     (function() {
       // DOM Elements
@@ -474,6 +472,7 @@
       const searchBtn = document.getElementById('search-btn');
       const themeBtn = document.getElementById('theme-btn');
       const formatBtns = document.querySelectorAll('.format-btn');
+      const resetBtn = document.getElementById('reset-btn');
       
       // Corkboard controls
       const addNoteBtn = document.getElementById('add-note-btn');
@@ -1308,6 +1307,35 @@
       }
       
       init();
+      
+      resetBtn.addEventListener('click', () => {
+        if (confirm('Are you sure you want to clear all notes and editor content? This cannot be undone.')) {
+          // Clear all stored data
+          localStorage.clear();
+          
+          // Reset editor content
+          editor.value = '';
+          updateWordCount();
+          updatePreview();
+          
+          // Clear cytoscape
+          cy.elements().remove();
+          
+          // Reset default view
+          visiblePanes = {
+            editor: true,
+            preview: false,
+            corkboard: false
+          };
+          updateLayout();
+          
+          // Hide any open sidebars or panels
+          hideNodeSidebar();
+          noteEditor.style.display = 'none';
+          
+          alert('All data has been cleared. You now have a fresh start!');
+        }
+      });
     })();
   </script>
 </body>
